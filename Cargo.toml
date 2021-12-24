@@ -1,0 +1,8 @@
+[package]
+name = "hikari"
+version = "0.1.0"
+authors = ["rocky <rocky.aozora@protonmail.com>"]
+edition = "2018"
+
+[dependencies]
+
