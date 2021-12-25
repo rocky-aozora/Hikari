@@ -9,8 +9,9 @@ fn main() {
     let rom_file_name = env::args().nth(1).unwrap();
 
     let rom = read_bin(rom_file_name);
-    let super_famicom = sfc::SuperFamicom::new(rom);
-    println!("{:?}", &super_famicom);
+    let mut super_famicom = sfc::SuperFamicom::new(rom);
+    super_famicom.initialize();
+    super_famicom.run();
 }
 
 fn read_bin<P: AsRef<Path>>(path: P) -> Box<[u8]> {

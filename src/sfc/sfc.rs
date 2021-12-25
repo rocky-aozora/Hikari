@@ -14,5 +14,15 @@ impl SuperFamicom {
             cpu: Core::new()
         }
     }
+
+    pub fn initialize(&mut self) {
+        self.cpu.initialize(&self.bus);
+    }
+
+    pub fn run(&mut self) {
+        println!("{:?}", &self);
+        println!();
+        self.cpu.run_cycle(&self.bus);
+    }
 }
 
