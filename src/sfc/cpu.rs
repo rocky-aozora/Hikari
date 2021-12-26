@@ -1,30 +1,49 @@
 use super::mem::MemoryBus;
 
 
-/// The data that is fetched by an `AddressingMode`.
-enum Fetched {
-    Nothing
+/// An `AddressingMode` determines what data an `Instruction` is operating on.
+/// They are implemented as a function (`AddressingModeFn`) on the cpu that
+/// fetches some data which the instruction can use to perform its logic with.
+enum AddressingMode {
+    Absolute(u16),
+    Implied
 }
 
+type AddressingModeFn = fn(&mut Core, &MemoryBus) -> AddressingMode;
 
-/// An `AddressingMode` determines what data an `Instruction` is operating on.
-/// They are implemented as a function on the cpu that fetches some data which the
-/// instruction can use to perform its logic with.
-type AddressingMode = fn(&mut Core) -> Fetched;
+fn implied(_cpu: &mut Core, _bus: &MemoryBus) -> AddressingMode {
+    AddressingMode::Implied
+}
 
-fn implied(_cpu: &mut Core) -> Fetched {
-    Fetched::Nothing
+fn absolute(cpu: &mut Core, bus: &MemoryBus) -> AddressingMode {
+    let addr_lo = bus.read(cpu.reg_db, cpu.reg_pc) as u16;
+    let addr_hi = bus.read(cpu.reg_db, cpu.reg_pc + 1) as u16;
+    cpu.reg_pc = cpu.reg_pc.wrapping_add(2);
+
+    let addr = (addr_hi << 8) | addr_lo;
+    AddressingMode::Absolute(addr)
 }
 
 
 /// An `Instruction` is the implementation of the 65816 CPU instruction related to
 /// the opcode. An instruction performs its logic on the CPU and can use different
 /// `AddressingMode`s to be able to work on different types of data.
-type Instruction = fn(&mut Core, AddressingMode) -> ();
+type Instruction = fn(&mut Core, &mut MemoryBus, AddressingModeFn) -> ();
+
+
+/// STZ (9C) - Store Zero
+fn stz(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
+    let addr = match mode(cpu, bus) {
+        AddressingMode::Absolute(addr) => addr,
+        _ => panic!("STZ: Invalid AddressingMode")
+    };
+
+    bus.write(cpu.reg_db, addr, 0);
+    cpu.cycles += 4;
+}
 
 /// SEI (78) - Set interrupt disable bit
-fn sei(cpu: &mut Core, mode: AddressingMode) {
-    mode(cpu);
+fn sei(cpu: &mut Core, _bus: &mut MemoryBus, _mode: AddressingModeFn) {
     cpu.reg_psr.i = InterruptFlag::Disabled;
     cpu.cycles += 2;
 }
@@ -68,8 +87,7 @@ pub struct Core {
 
     reg_sp: u16,
     pub reg_pc: u16,
-    pub reg_pb: u8,
-    reg_db: u8,
+    pub reg_db: u8,
 
     reg_psr: ProcessorStatusRegister,
     cycles: usize
@@ -86,24 +104,20 @@ impl Core {
         self.reg_pc = (reset_vec_hi << 8) | reset_vec_lo;
     }
 
-    pub fn run_cycle(&mut self, bus: &MemoryBus) -> u8 {
-        let op = bus.read(self.reg_pb, self.reg_pc);
+    pub fn run_cycle(&mut self, bus: &mut MemoryBus) -> u8 {
+        let op = bus.read(self.reg_db, self.reg_pc);
         self.reg_pc += 1;
 
-        match fetch_instruction(&op) {
-            Some((instruction, address_mode)) => instruction(self, address_mode),
-            None => panic!("Core: Unknown instruction {:X}", op)
+        match op {
+            // Store Register in Memory
+            0x9C => stz(self, bus, absolute),
+
+            // CPU Control
+            0x78 => sei(self, bus, implied),
+            _ => panic!("Core: Unknown instruction {:X}", op)
         }
 
-        self.cycles = 0;
         op
-    }
-}
-
-fn fetch_instruction(op: &u8) -> Option<(Instruction, AddressingMode)> {
-    match op {
-        0x78 => Some((sei, implied)),
-        _ => None
     }
 }
 

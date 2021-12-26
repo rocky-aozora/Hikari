@@ -10,7 +10,7 @@ fn main() {
     let rom_file_name = env::args().nth(1).unwrap();
 
     let rom = read_bin(rom_file_name);
-    let mut super_famicom = sfc::SuperFamicom::new(rom);
+    let super_famicom = sfc::SuperFamicom::new(rom);
     let mut debugger = dbg::Debugger::new(super_famicom);
 
     debugger.repl();

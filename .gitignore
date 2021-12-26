@@ -4,3 +4,6 @@
 # Test roms
 /roms
 
+# Documentation (datasheets, etc.)
+/docs
+

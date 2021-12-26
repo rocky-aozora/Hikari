@@ -24,7 +24,7 @@ impl SuperFamicom {
     }
 
     pub fn run_cycle(&mut self) -> u8 {
-        self.cpu.run_cycle(&self.bus)
+        self.cpu.run_cycle(&mut self.bus)
     }
 }
 
