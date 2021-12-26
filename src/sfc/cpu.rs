@@ -7,6 +7,7 @@ use super::mem::MemoryBus;
 #[derive(PartialEq)]
 enum AddressingMode {
     Absolute(u16),
+    Immediate(u8),
     Implied
 }
 
@@ -14,6 +15,12 @@ type AddressingModeFn = fn(&mut Core, &MemoryBus) -> AddressingMode;
 
 fn implied(_cpu: &mut Core, _bus: &MemoryBus) -> AddressingMode {
     AddressingMode::Implied
+}
+
+fn immediate(cpu: &mut Core, bus: &MemoryBus) -> AddressingMode {
+    let value = bus.read(cpu.reg_db, cpu.reg_pc);
+    cpu.reg_pc = cpu.reg_pc.wrapping_add(1);
+    AddressingMode::Immediate(value)
 }
 
 fn absolute(cpu: &mut Core, bus: &MemoryBus) -> AddressingMode {
@@ -31,15 +38,61 @@ fn absolute(cpu: &mut Core, bus: &MemoryBus) -> AddressingMode {
 /// `AddressingMode`s to be able to work on different types of data.
 type Instruction = fn(&mut Core, &mut MemoryBus, AddressingModeFn) -> ();
 
+// Load Register from Memory
+
+/// LDA (A9) - Load Accumulator
+fn lda(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
+    let value: u8 = match mode(cpu, bus) {
+        AddressingMode::Immediate(value) => value,
+        _ => panic!("LDA: Invalid AddressingMode")
+    };
+
+    cpu.reg_a = value as u16;
+    match cpu.reg_psr.e {
+        EmulationMode::Emulation => {
+            cpu.reg_psr.n = value & (1 << 7) != 0;
+            cpu.reg_psr.z = value == 0;
+        },
+        EmulationMode::Native => {
+            cpu.reg_psr.n = (value as u16) & (1 << 15) != 0;
+            cpu.reg_psr.z = value == 0;
+        }
+    }
+
+    cpu.cycles += 2;
+}
+
+// Store Register in Memory
 
 /// STZ (9C) - Store Zero
 fn stz(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
-    let addr = match mode(cpu, bus) {
+    let addr: u16 = match mode(cpu, bus) {
         AddressingMode::Absolute(addr) => addr,
         _ => panic!("STZ: Invalid AddressingMode")
     };
 
     bus.write(cpu.reg_db, addr, 0);
+    cpu.cycles += 4;
+}
+
+/// STA (8D) - Store Accumulator
+fn sta(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
+    let addr: u16 = match mode(cpu, bus) {
+        AddressingMode::Absolute(addr) => addr,
+        _ => panic!("STZ: Invalid AddressingMode")
+    };
+
+    match cpu.reg_psr.e {
+        EmulationMode::Emulation => {
+            bus.write(cpu.reg_db, addr, cpu.reg_a as u8);
+        },
+        EmulationMode::Native => {
+            // TODO: Figure out if this is correct
+            bus.write(cpu.reg_db, addr, cpu.reg_a as u8);
+            bus.write(cpu.reg_db, addr + 1, (cpu.reg_a >> 8) as u8);
+        }
+    }
+
     cpu.cycles += 4;
 }
 
@@ -70,18 +123,32 @@ fn xce(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
         panic!("SEI: Invalid AddressingMode");
     }
 
+    use EmulationMode::*;
     let temp = cpu.reg_psr.c;
-    cpu.reg_psr.c = cpu.reg_psr.e;
-    cpu.reg_psr.e = temp;
+    cpu.reg_psr.c = cpu.reg_psr.e == Emulation;
+    cpu.reg_psr.e = if temp { Emulation } else { Native };
     cpu.cycles += 2;
 }
 
+#[derive(PartialEq, Debug)]
+enum EmulationMode {
+    Emulation,
+    Native
+}
+
+impl Default for EmulationMode {
+    fn default() -> EmulationMode {
+        EmulationMode::Emulation
+    }
+}
 
 #[derive(Default, Debug)]
 struct ProcessorStatusRegister {
     c: bool, // Carry
+    z: bool, // Zero
     i: bool, // Interrupt disable
-    e: bool, // 6502 Emulation mode
+    n: bool, // Negative (Sign)
+    e: EmulationMode, // 6502 Emulation mode
 }
 
 #[derive(Default, Debug)]
@@ -114,8 +181,12 @@ impl Core {
         self.reg_pc += 1;
 
         match op {
+            // Load Register from Memory
+            0xA9 => lda(self, bus, immediate),
+
             // Store Register in Memory
             0x9C => stz(self, bus, absolute),
+            0x8D => sta(self, bus, absolute),
 
             // CPU Control
             0x18 => clc(self, bus, implied),
