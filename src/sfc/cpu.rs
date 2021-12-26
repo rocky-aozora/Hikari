@@ -118,6 +118,18 @@ fn sei(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
     cpu.cycles += 2;
 }
 
+/// REP (C2) - Reset Status Bits
+fn rep(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
+    let value: u8 = match mode(cpu, bus) {
+        AddressingMode::Immediate(value) => value,
+        _ => panic!("REP: Invalid AddressingMode")
+    };
+
+    let registers = cpu.reg_psr.as_u8() & !value;
+    cpu.reg_psr.set_from_u8(registers);
+    cpu.cycles += 3;
+}
+
 fn xce(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
     if mode(cpu, bus) != AddressingMode::Implied {
         panic!("SEI: Invalid AddressingMode");
@@ -142,13 +154,57 @@ impl Default for EmulationMode {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 struct ProcessorStatusRegister {
     c: bool, // Carry
     z: bool, // Zero
     i: bool, // Interrupt disable
+    d: bool, // Decimal mode
+    b: bool, // Break flag (also known as X)
+    u: bool, // Unused (also known as M)
+    v: bool, // Overflow
     n: bool, // Negative (Sign)
     e: EmulationMode, // 6502 Emulation mode
+}
+
+impl ProcessorStatusRegister {
+    fn as_u8(&self) -> u8 {
+        ((self.c as u8) << 0) +
+        ((self.z as u8) << 1) +
+        ((self.i as u8) << 2) +
+        ((self.d as u8) << 3) +
+        ((self.b as u8) << 4) +
+        ((self.u as u8) << 5) +
+        ((self.v as u8) << 6) +
+        ((self.n as u8) << 7)
+    }
+
+    fn set_from_u8(&mut self, flags: u8) {
+        // self.u is always 1, cannot be set
+        self.c = flags & 0b0000_0001 != 0;
+        self.z = flags & 0b0000_0010 != 0;
+        self.i = flags & 0b0000_0100 != 0;
+        self.d = flags & 0b0000_1000 != 0;
+        self.b = flags & 0b0001_0000 != 0;
+        self.v = flags & 0b0100_0000 != 0;
+        self.n = flags & 0b1000_0000 != 0;
+    }
+}
+
+impl Default for ProcessorStatusRegister {
+    fn default() -> ProcessorStatusRegister {
+        ProcessorStatusRegister {
+            c: false,
+            z: false,
+            i: false,
+            d: false,
+            b: false,
+            u: true,
+            v: false,
+            n: false,
+            e: EmulationMode::Emulation
+        }
+    }
 }
 
 #[derive(Default, Debug)]
@@ -191,6 +247,7 @@ impl Core {
             // CPU Control
             0x18 => clc(self, bus, implied),
             0x78 => sei(self, bus, implied),
+            0xC2 => rep(self, bus, immediate),
             0xFB => xce(self, bus, implied),
             _ => panic!("Core: Unknown instruction {:X}", op)
         }
