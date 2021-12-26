@@ -3,6 +3,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
+mod dbg;
 mod sfc;
 
 fn main() {
@@ -10,8 +11,9 @@ fn main() {
 
     let rom = read_bin(rom_file_name);
     let mut super_famicom = sfc::SuperFamicom::new(rom);
-    super_famicom.initialize();
-    super_famicom.run();
+    let mut debugger = dbg::Debugger::new(super_famicom);
+
+    debugger.repl();
 }
 
 fn read_bin<P: AsRef<Path>>(path: P) -> Box<[u8]> {
