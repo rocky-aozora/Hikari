@@ -4,6 +4,7 @@ use super::mem::MemoryBus;
 /// An `AddressingMode` determines what data an `Instruction` is operating on.
 /// They are implemented as a function (`AddressingModeFn`) on the cpu that
 /// fetches some data which the instruction can use to perform its logic with.
+#[derive(PartialEq)]
 enum AddressingMode {
     Absolute(u16),
     Implied
@@ -42,12 +43,39 @@ fn stz(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
     cpu.cycles += 4;
 }
 
+// CPU Control
+
+/// CLC (18) - Clear carry flag
+fn clc(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
+    if mode(cpu, bus) != AddressingMode::Implied {
+        panic!("CLC: Invalid AddressingMode");
+    }
+
+    cpu.reg_psr.c = CarryFlag::NoCarry;
+    cpu.cycles += 2;
+}
+
 /// SEI (78) - Set interrupt disable bit
-fn sei(cpu: &mut Core, _bus: &mut MemoryBus, _mode: AddressingModeFn) {
+fn sei(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
+    if mode(cpu, bus) != AddressingMode::Implied {
+        panic!("SEI: Invalid AddressingMode");
+    }
+
     cpu.reg_psr.i = InterruptFlag::Disabled;
     cpu.cycles += 2;
 }
 
+#[derive(Debug)]
+enum CarryFlag {
+    NoCarry,
+    Carry
+}
+
+impl Default for CarryFlag {
+    fn default() -> CarryFlag {
+        CarryFlag::NoCarry
+    }
+}
 
 #[derive(Debug)]
 enum InterruptFlag {
@@ -75,6 +103,7 @@ impl Default for EmulationFlag {
 
 #[derive(Default, Debug)]
 struct ProcessorStatusRegister {
+    c: CarryFlag,
     i: InterruptFlag,
     e: EmulationFlag
 }
@@ -113,6 +142,7 @@ impl Core {
             0x9C => stz(self, bus, absolute),
 
             // CPU Control
+            0x18 => clc(self, bus, implied),
             0x78 => sei(self, bus, implied),
             _ => panic!("Core: Unknown instruction {:X}", op)
         }
