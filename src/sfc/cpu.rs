@@ -51,7 +51,7 @@ fn clc(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
         panic!("CLC: Invalid AddressingMode");
     }
 
-    cpu.reg_psr.c = CarryFlag::NoCarry;
+    cpu.reg_psr.c = false;
     cpu.cycles += 2;
 }
 
@@ -61,51 +61,27 @@ fn sei(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
         panic!("SEI: Invalid AddressingMode");
     }
 
-    cpu.reg_psr.i = InterruptFlag::Disabled;
+    cpu.reg_psr.i = true;
     cpu.cycles += 2;
 }
 
-#[derive(Debug)]
-enum CarryFlag {
-    NoCarry,
-    Carry
-}
-
-impl Default for CarryFlag {
-    fn default() -> CarryFlag {
-        CarryFlag::NoCarry
+fn xce(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
+    if mode(cpu, bus) != AddressingMode::Implied {
+        panic!("SEI: Invalid AddressingMode");
     }
+
+    let temp = cpu.reg_psr.c;
+    cpu.reg_psr.c = cpu.reg_psr.e;
+    cpu.reg_psr.e = temp;
+    cpu.cycles += 2;
 }
 
-#[derive(Debug)]
-enum InterruptFlag {
-    Disabled,
-    Enabled
-}
-
-impl Default for InterruptFlag {
-    fn default() -> InterruptFlag {
-        InterruptFlag::Enabled
-    }
-}
-
-#[derive(Debug)]
-enum EmulationFlag {
-    Emulation,
-    Native
-}
-
-impl Default for EmulationFlag {
-    fn default() -> EmulationFlag {
-        EmulationFlag::Emulation
-    }
-}
 
 #[derive(Default, Debug)]
 struct ProcessorStatusRegister {
-    c: CarryFlag,
-    i: InterruptFlag,
-    e: EmulationFlag
+    c: bool, // Carry
+    i: bool, // Interrupt disable
+    e: bool, // 6502 Emulation mode
 }
 
 #[derive(Default, Debug)]
@@ -144,6 +120,7 @@ impl Core {
             // CPU Control
             0x18 => clc(self, bus, implied),
             0x78 => sei(self, bus, implied),
+            0xFB => xce(self, bus, implied),
             _ => panic!("Core: Unknown instruction {:X}", op)
         }
 
