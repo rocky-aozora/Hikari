@@ -45,11 +45,11 @@ impl Debugger {
     }
 
     fn step_emulator(&mut self) {
-        let current_pc = format!("Executing at {:x}:", self.device.cpu().reg_pc);
+        let current_pc = format!("Executing at {:X}:", self.device.cpu().reg_pc);
         let instruction = self.device.run_cycle();
 
         // TODO: Dissasemle
-        println!("{} {:x}", current_pc, instruction);
+        println!("{} {:X}", current_pc, instruction);
     }
 
     fn inspect_emulator(&self) {

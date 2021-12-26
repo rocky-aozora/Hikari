@@ -11,6 +11,11 @@ impl IoPorts {
         IoPorts::default()
     }
 
+    fn read(&self, _bank: u8, _addr: u16) -> u8 {
+        // TODO: Implement
+        0
+    }
+
     fn write(&mut self, _bank: u8, _addr: u16, _val: u8) {
         // TODO: Implement
     }
@@ -22,7 +27,7 @@ const WRAM_SIZE: usize = 0x20000; // 128kb
 pub struct MemoryBus {
     io: IoPorts,
     cart: Cartridge,
-    wram: [u8; WRAM_SIZE] // 128kb
+    wram: [u8; WRAM_SIZE]
 }
 
 impl MemoryBus {
@@ -38,6 +43,7 @@ impl MemoryBus {
         match bank {
             0x00..=0x3F => match addr { // Q1
                 0x0000..=0x1FFF => self.wram[(addr as usize) + ((bank as usize) * 0x2000)],
+                0x2100..=0x21FF => self.io.read(bank, addr),
                 0x8000..=0xFFFF => self.cart.read(bank, addr),
                 _ => panic!("MemoryBus: read unknown address {:X} on bank {:X}", addr, bank)
             },
@@ -57,6 +63,7 @@ impl MemoryBus {
         match bank {
             0x00..=0x3F => match addr { // Q1
                 0x0000..=0x1FFF => self.wram[(addr as usize) + ((bank as usize) * 0x2000)] = val,
+                0x2100..=0x21FF => self.io.write(bank, addr, val),
                 0x4200..=0x5FFF => self.io.write(bank, addr, val),
                 0x8000..=0xFFFF => self.cart.write(bank, addr, val),
                 _ => panic!("MemoryBus: write to unknown address {:X} on bank {:X}", addr, bank)
