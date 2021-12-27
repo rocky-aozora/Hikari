@@ -1,4 +1,32 @@
+use std::convert::TryFrom;
+use num_enum::TryFromPrimitive;
+
 use super::mem::MemoryBus;
+
+#[derive(Debug, TryFromPrimitive)]
+#[repr(u8)]
+pub enum Opcode {
+    Lda = 0xA9,
+    Stz = 0x9C,
+    Sta = 0x8D,
+    Rti = 0x40,
+    Brk = 0x00,
+    Clc = 0x18,
+    Sei = 0x78,
+    Rep = 0xC2,
+    Xce = 0xFB
+}
+
+pub struct Instruction(pub u8);
+
+impl Instruction {
+    #[inline(always)]
+    pub fn op(&self) -> Opcode {
+        Opcode::try_from(self.0).unwrap_or_else(|_| {
+            panic!("Instruction: unrecognized opcode {:X}", self.0)
+        })
+    }
+}
 
 
 /// An `AddressingMode` determines what data an `Instruction` is operating on.
@@ -36,7 +64,7 @@ fn absolute(cpu: &mut Core, bus: &MemoryBus) -> AddressingMode {
 /// An `Instruction` is the implementation of the 65816 CPU instruction related to
 /// the opcode. An instruction performs its logic on the CPU and can use different
 /// `AddressingMode`s to be able to work on different types of data.
-type Instruction = fn(&mut Core, &mut MemoryBus, AddressingModeFn) -> ();
+type InstructionFn = fn(&mut Core, &mut MemoryBus, AddressingModeFn) -> ();
 
 // Load Register from Memory
 
@@ -290,33 +318,31 @@ impl Core {
         self.reg_sp = 0x01FF;
     }
 
-    pub fn run_cycle(&mut self, bus: &mut MemoryBus) -> u8 {
-        let op = bus.read(self.reg_db, self.reg_pc);
+    pub fn run_cycle(&mut self, bus: &mut MemoryBus) {
+        let instr = Instruction(bus.read(self.reg_db, self.reg_pc));
         self.reg_pc += 1;
 
-        match op {
+        use Opcode::*;
+        match instr.op() {
             // Load Register from Memory
-            0xA9 => lda(self, bus, immediate),
+            Lda => lda(self, bus, immediate),
 
             // Store Register in Memory
-            0x9C => stz(self, bus, absolute),
-            0x8D => sta(self, bus, absolute),
+            Stz => stz(self, bus, absolute),
+            Sta => sta(self, bus, absolute),
 
             // Normal Jumps
-            0x40 => rti(self, bus, implied),
+            Rti => rti(self, bus, implied),
 
             // Interrupts, Exceptions and Breakpoints
-            0x00 => brk(self, bus, implied),
+            Brk => brk(self, bus, implied),
 
             // CPU Control
-            0x18 => clc(self, bus, implied),
-            0x78 => sei(self, bus, implied),
-            0xC2 => rep(self, bus, immediate),
-            0xFB => xce(self, bus, implied),
-            _ => panic!("Core: Unknown instruction {:X}", op)
+            Clc => clc(self, bus, implied),
+            Sei => sei(self, bus, implied),
+            Rep => rep(self, bus, immediate),
+            Xce => xce(self, bus, implied)
         }
-
-        op
     }
 
     fn push_stack(&mut self, bus: &mut MemoryBus, value: u8) {

@@ -6,4 +6,5 @@ license = "GPL-3.0-or-later"
 edition = "2018"
 
 [dependencies]
+num_enum = "0.5"
 

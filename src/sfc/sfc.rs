@@ -19,12 +19,16 @@ impl SuperFamicom {
         self.cpu.initialize(&self.bus);
     }
 
+    pub fn bus(&self) -> &MemoryBus {
+        &self.bus
+    }
+
     pub fn cpu(&self) -> &Core {
         &self.cpu
     }
 
-    pub fn run_cycle(&mut self) -> u8 {
-        self.cpu.run_cycle(&mut self.bus)
+    pub fn run_cycle(&mut self) {
+        self.cpu.run_cycle(&mut self.bus);
     }
 }
 
