@@ -41,7 +41,7 @@ impl Debugger {
 
     fn continue_emulator(&mut self) {
         // TODO: Implement breakpoints
-        loop { self.device.run_cycle(); }
+        loop { self.step_emulator() }
     }
 
     fn step_emulator(&mut self) {

@@ -96,6 +96,62 @@ fn sta(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
     cpu.cycles += 4;
 }
 
+// Normal Jumps
+
+/// RTI (40) - Return from Interrupt
+fn rti(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
+    if mode(cpu, bus) != AddressingMode::Implied {
+        panic!("RTI: Invalid AddressingMode");
+    }
+
+    let reg_psr = cpu.pop_stack(bus);
+    cpu.reg_psr.set_from_u8(reg_psr);
+
+
+    cpu.reg_db = cpu.pop_stack(bus);
+    let reg_pc_hi = cpu.pop_stack(bus) as u16;
+    let reg_pc_lo = cpu.pop_stack(bus) as u16;
+    cpu.reg_pc = (reg_pc_hi << 8) | reg_pc_lo;
+
+    cpu.cycles += 6;
+}
+
+// Interrupts, Exceptions and Breakpoints
+
+/// BRK (00) - Break
+fn brk(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
+    if mode(cpu, bus) != AddressingMode::Implied {
+        panic!("BRK: Invalid AddressingMode");
+    }
+
+    // TODO: Cycles?
+    let new_reg_pc = cpu.reg_pc.wrapping_add(2);
+
+    cpu.reg_psr.b = true;
+    cpu.push_stack(bus, new_reg_pc as u8);
+    cpu.push_stack(bus, (new_reg_pc >> 8) as u8);
+    cpu.push_stack(bus, cpu.reg_db as u8);
+    cpu.push_stack(bus, cpu.reg_psr.as_u8());
+    cpu.reg_psr.d = false;
+    cpu.reg_psr.i = true;
+    cpu.reg_db = 0x00;
+
+    match cpu.reg_psr.e {
+        EmulationMode::Emulation => {
+            let reset_vector_lo = bus.read(cpu.reg_db, 0xFFFE) as u16;
+            let reset_vector_hi = bus.read(cpu.reg_db, 0xFFFF) as u16;
+            let reset_vector = (reset_vector_hi << 8) | reset_vector_lo;
+            cpu.reg_pc = reset_vector;
+        },
+        EmulationMode::Native => {
+            let reset_vector_lo = bus.read(cpu.reg_db, 0xFFF6) as u16;
+            let reset_vector_hi = bus.read(cpu.reg_db, 0xFFF7) as u16;
+            let reset_vector = (reset_vector_hi << 8) | reset_vector_lo;
+            cpu.reg_pc = reset_vector;
+        }
+    }
+}
+
 // CPU Control
 
 /// CLC (18) - Clear carry flag
@@ -230,6 +286,8 @@ impl Core {
         let reset_vec_lo = bus.read(0, 0xFFFC) as u16;
         let reset_vec_hi = bus.read(0, 0xFFFD) as u16;
         self.reg_pc = (reset_vec_hi << 8) | reset_vec_lo;
+
+        self.reg_sp = 0x01FF;
     }
 
     pub fn run_cycle(&mut self, bus: &mut MemoryBus) -> u8 {
@@ -244,6 +302,12 @@ impl Core {
             0x9C => stz(self, bus, absolute),
             0x8D => sta(self, bus, absolute),
 
+            // Normal Jumps
+            0x40 => rti(self, bus, implied),
+
+            // Interrupts, Exceptions and Breakpoints
+            0x00 => brk(self, bus, implied),
+
             // CPU Control
             0x18 => clc(self, bus, implied),
             0x78 => sei(self, bus, implied),
@@ -253,6 +317,19 @@ impl Core {
         }
 
         op
+    }
+
+    fn push_stack(&mut self, bus: &mut MemoryBus, value: u8) {
+        // TODO: Check hardcoded bank 0
+        bus.write(0x00, self.reg_sp, value);
+        self.reg_sp -= 1;
+    }
+
+    fn pop_stack(&mut self, bus: &mut MemoryBus) -> u8 {
+        // TODO: Check hardcoded bank 0
+        self.reg_sp += 1;
+        let ret = bus.read(0x00, self.reg_sp);
+        ret
     }
 }
 
