@@ -52,6 +52,7 @@ struct Header {
     version: u8,
     name: String,
     region: Region,
+    dev_id: u8,
 
     mapper: Mapper,
     cart_type: Type,
@@ -143,7 +144,7 @@ fn parse_header(expected_type: Mapper, rom: &Box<[u8]>) -> Header {
     let header_data = &rom[header_data_start..=header_data_end];
 
     let name = title_from_bytes(&header_data[0x10..=0x24]);
-    let mapper_mode = header_data[0x25];
+    let _mapper_mode = header_data[0x25];
     let cart_type = header_data[0x26];
     let cart_type = Type::try_from(cart_type).unwrap_or_else(|_| {
         panic!("Unrecognized Cart Type!")
@@ -170,6 +171,7 @@ fn parse_header(expected_type: Mapper, rom: &Box<[u8]>) -> Header {
         version,
         name,
         region,
+        dev_id,
 
         mapper: expected_type,
         cart_type,

@@ -70,7 +70,7 @@ impl Debugger {
             _ => panic!("Debugger: cannot inspect address: {:?}", addr)
         };
 
-        Instruction(data).op()
+        Instruction::new(data).op
     }
 }
 

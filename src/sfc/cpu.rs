@@ -1,30 +1,43 @@
-use std::convert::TryFrom;
-use num_enum::TryFromPrimitive;
-
 use super::mem::MemoryBus;
 
-#[derive(Debug, TryFromPrimitive)]
-#[repr(u8)]
+#[derive(Debug)]
 pub enum Opcode {
-    Lda = 0xA9,
-    Stz = 0x9C,
-    Sta = 0x8D,
-    Rti = 0x40,
-    Brk = 0x00,
-    Clc = 0x18,
-    Sei = 0x78,
-    Rep = 0xC2,
-    Xce = 0xFB
+    Lda,
+    Stz,
+    Sta,
+    Rti,
+    Brk,
+    Clc,
+    Sei,
+    Rep,
+    Xce
 }
 
-pub struct Instruction(pub u8);
+pub struct Instruction {
+    pub op: Opcode,
+    mode: AddressingModeFn,
+    func: InstructionFn
+}
 
 impl Instruction {
-    #[inline(always)]
-    pub fn op(&self) -> Opcode {
-        Opcode::try_from(self.0).unwrap_or_else(|_| {
-            panic!("Instruction: unrecognized opcode {:X}", self.0)
-        })
+    pub fn new(op: u8) -> Self {
+        match op {
+            0xA9 => Instruction { op: Opcode::Lda, func: lda, mode: immediate },
+            0x9C => Instruction { op: Opcode::Stz, func: stz, mode: absolute },
+            0x8D => Instruction { op: Opcode::Sta, func: sta, mode: absolute },
+            0x40 => Instruction { op: Opcode::Rti, func: rti, mode: implied },
+            0x00 => Instruction { op: Opcode::Brk, func: brk, mode: implied },
+            0x18 => Instruction { op: Opcode::Clc, func: clc, mode: implied },
+            0x78 => Instruction { op: Opcode::Sei, func: sei, mode: implied },
+            0xC2 => Instruction { op: Opcode::Rep, func: rep, mode: immediate },
+            0xFB => Instruction { op: Opcode::Xce, func: xce, mode: implied },
+
+            _ => panic!("Unimplemented opcode {:X}", op)
+        }
+    }
+
+    fn exec(&self, cpu: &mut Core, bus: &mut MemoryBus) {
+        (self.func)(cpu, bus, self.mode);
     }
 }
 
@@ -319,30 +332,10 @@ impl Core {
     }
 
     pub fn run_cycle(&mut self, bus: &mut MemoryBus) {
-        let instr = Instruction(bus.read(self.reg_db, self.reg_pc));
+        let instr = Instruction::new(bus.read(self.reg_db, self.reg_pc));
         self.reg_pc += 1;
 
-        use Opcode::*;
-        match instr.op() {
-            // Load Register from Memory
-            Lda => lda(self, bus, immediate),
-
-            // Store Register in Memory
-            Stz => stz(self, bus, absolute),
-            Sta => sta(self, bus, absolute),
-
-            // Normal Jumps
-            Rti => rti(self, bus, implied),
-
-            // Interrupts, Exceptions and Breakpoints
-            Brk => brk(self, bus, implied),
-
-            // CPU Control
-            Clc => clc(self, bus, implied),
-            Sei => sei(self, bus, implied),
-            Rep => rep(self, bus, immediate),
-            Xce => xce(self, bus, implied)
-        }
+        instr.exec(self, bus)
     }
 
     fn push_stack(&mut self, bus: &mut MemoryBus, value: u8) {
