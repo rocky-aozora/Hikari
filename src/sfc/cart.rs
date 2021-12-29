@@ -133,6 +133,18 @@ impl Cartridge {
             }
         }
     }
+
+    pub fn print_header(&self) {
+        println!("name: {}", self.header.name);
+        println!("type: {:?}", self.header.cart_type);
+        println!("rom_size: {}KB", self.header.rom_size / 1024);
+        println!("ram_size: {}KB", self.header.ram_size / 1024);
+        println!("dev_id: {:#X}", self.header.dev_id);
+        println!("version: {}", self.header.version);
+        println!("region: {:?}", self.header.region);
+        let valid = !self.header.checksum == self.header.complement;
+        println!("checksum: {}", if valid { "VALID" } else { "INVALID" });
+    }
 }
 
 fn parse_header(expected_type: Mapper, rom: &Box<[u8]>) -> Header {
@@ -140,6 +152,10 @@ fn parse_header(expected_type: Mapper, rom: &Box<[u8]>) -> Header {
         Mapper::LoRom => (0x7FB0, 0xFFFF),
         Mapper::HiRom => unimplemented!()
     };
+
+    // Hack for .sfc's smaller than 1MB
+    let header_data_start = header_data_start & rom.len() - 1;
+    let header_data_end = header_data_end & rom.len() - 1;
 
     let header_data = &rom[header_data_start..=header_data_end];
 
