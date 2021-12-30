@@ -2,6 +2,8 @@ use super::mem::MemoryBus;
 
 #[derive(Debug)]
 pub enum Opcode {
+    Tcd,
+    Tcs,
     Lda,
     Ldx,
     Ldy,
@@ -20,6 +22,7 @@ pub enum Opcode {
     Clc,
     Sei,
     Rep,
+    Sep,
     Xce
 }
 
@@ -32,10 +35,13 @@ pub struct Instruction {
 impl Instruction {
     pub fn new(op: u8) -> Self {
         match op {
+            0x5B => Instruction { op: Opcode::Tcd, func: tcd, mode: implied },
+            0x1B => Instruction { op: Opcode::Tcs, func: tcs, mode: implied },
             0xA9 => Instruction { op: Opcode::Lda, func: lda, mode: immediate },
             0xA2 => Instruction { op: Opcode::Ldx, func: ldx, mode: immediate },
             0xAC => Instruction { op: Opcode::Ldy, func: ldy, mode: absolute },
             0x9C => Instruction { op: Opcode::Stz, func: stz, mode: absolute },
+            0x85 => Instruction { op: Opcode::Sta, func: sta, mode: direct_page },
             0x8D => Instruction { op: Opcode::Sta, func: sta, mode: absolute },
             0x03 => Instruction { op: Opcode::Ora, func: ora, mode: stack_relative },
             0x01 => Instruction { op: Opcode::Ora, func: ora, mode: indirect_x },
@@ -51,7 +57,8 @@ impl Instruction {
             0x00 => Instruction { op: Opcode::Brk, func: brk, mode: implied },
             0x18 => Instruction { op: Opcode::Clc, func: clc, mode: implied },
             0x78 => Instruction { op: Opcode::Sei, func: sei, mode: implied },
-            0xC2 => Instruction { op: Opcode::Rep, func: rep, mode: immediate_b },
+            0xC2 => Instruction { op: Opcode::Rep, func: rep, mode: immediate },
+            0xE2 => Instruction { op: Opcode::Sep, func: sep, mode: immediate },
             0xFB => Instruction { op: Opcode::Xce, func: xce, mode: implied },
             _ => panic!("Unimplemented opcode {:X}", op)
         }
@@ -68,8 +75,7 @@ impl Instruction {
 /// fetches some data which the instruction can use to perform its logic with.
 #[derive(PartialEq)]
 enum AddressingMode {
-    Immediate(u16),
-    ImmediateB(u8),
+    Immediate,
     Absolute(u16),
     AbsoluteX(u16),
     DirectPage(u8),
@@ -82,9 +88,7 @@ enum AddressingMode {
 impl AddressingMode {
     fn read_byte(self, cpu: &mut Core, bus: &MemoryBus) -> u8 {
         match self {
-            AddressingMode::Immediate(_) =>
-                panic!("AddressingMode: read byte from immediate in 16-bit mode"),
-            AddressingMode::ImmediateB(value) => value,
+            AddressingMode::Immediate => cpu.read_byte(bus),
             _ => {
                 let (bank, addr) = self.address(cpu, bus);
                 bus.read(bank, addr)
@@ -95,9 +99,7 @@ impl AddressingMode {
 
     fn read_word(self, cpu: &mut Core, bus: &MemoryBus) -> u16 {
         match self {
-            AddressingMode::Immediate(value) => value,
-            AddressingMode::ImmediateB(_) =>
-                panic!("AddressingMode: read word from immediate in 8-bit mode"),
+            AddressingMode::Immediate => cpu.read_word(bus),
             _ => {
                 let (bank, addr) = self.address(cpu, bus);
                 let word_lo = bus.read(bank, addr) as u16;
@@ -123,10 +125,10 @@ impl AddressingMode {
             AddressingMode::StackRelative(offset) =>
                 (cpu.reg_db, cpu.reg_sp.wrapping_add(offset)),
             AddressingMode::Long(bank, addr) => (bank, addr),
-            AddressingMode::DirectPage(addr) => (0x00, addr as u16),
+            AddressingMode::DirectPage(addr) => (0x00, cpu.reg_d.wrapping_add(addr as u16)),
             AddressingMode::Implied =>
                 panic!("AddressingMode: attempting to address an implied address"),
-            AddressingMode::Immediate(_) | AddressingMode::ImmediateB(_) =>
+            AddressingMode::Immediate =>
                 panic!("AddressingMode: attempting to addres an immediate value")
         }
     }
@@ -135,27 +137,12 @@ impl AddressingMode {
 
 type AddressingModeFn = fn(&mut Core, &MemoryBus) -> AddressingMode;
 
-fn implied(_cpu: &mut Core, _bus: &MemoryBus) -> AddressingMode {
+fn implied(_: &mut Core, _: &MemoryBus) -> AddressingMode {
     AddressingMode::Implied
 }
 
-fn immediate(cpu: &mut Core, bus: &MemoryBus) -> AddressingMode {
-    match cpu.reg_psr.e {
-        EmulationMode::Emulation => {
-            let value = cpu.read_byte(bus);
-            AddressingMode::ImmediateB(value)
-        },
-        EmulationMode::Native => {
-            let value = cpu.read_word(bus);
-            AddressingMode::Immediate(value)
-        }
-    }
-}
-
-
-fn immediate_b(cpu: &mut Core, bus: &MemoryBus) -> AddressingMode {
-    let value = cpu.read_byte(bus);
-    AddressingMode::ImmediateB(value)
+fn immediate(_: &mut Core, _: &MemoryBus) -> AddressingMode {
+    AddressingMode::Immediate
 }
 
 fn absolute(cpu: &mut Core, bus: &MemoryBus) -> AddressingMode {
@@ -200,26 +187,68 @@ fn long(cpu: &mut Core, bus: &MemoryBus) -> AddressingMode {
 /// `AddressingMode`s to be able to work on different types of data.
 type InstructionFn = fn(&mut Core, &mut MemoryBus, AddressingModeFn) -> ();
 
+
+// Register to Register Transfer
+
+/// TCD (5B) - Transfer A to D
+fn tcd(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
+    if mode(cpu, bus) != AddressingMode::Implied {
+        panic!("TCD: Invalid AddressingMode");
+    }
+
+    cpu.reg_d = cpu.reg_a;
+    cpu.reg_psr.n = cpu.reg_a & (1 << 15) != 0;
+    cpu.reg_psr.z = cpu.reg_a == 0;
+    cpu.cycles += 2;
+}
+
+/// TCS (1B) - Transfer A to SP
+fn tcs(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
+    if mode(cpu, bus) != AddressingMode::Implied {
+        panic!("TCS: Invalid AddressingMode");
+    }
+
+    cpu.reg_sp = cpu.reg_a;
+    cpu.cycles += 2;
+}
+
 // Load Register from Memory
 
 /// LDA (A9) - Load Accumulator
 fn lda(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
     let address: AddressingMode = mode(cpu, bus);
 
-    match cpu.reg_psr.e {
-        EmulationMode::Emulation => {
-            let value = address.read_byte(cpu, bus);
-            cpu.reg_psr.n = value & (1 << 7) != 0;
-            cpu.reg_psr.z = value == 0;
+    cpu.cycles += 2;
+    match address {
+        AddressingMode::Immediate => match cpu.reg_psr.m {
+            true => {
+                let value = address.read_byte(cpu, bus);
+                cpu.reg_psr.n = value & (1 << 7) != 0;
+                cpu.reg_psr.z = value == 0;
+                cpu.reg_a = (cpu.reg_a & !0xFF) | value as u16;
+            },
+            false => {
+                let value = address.read_word(cpu, bus);
+                cpu.reg_psr.n = value & (1 << 15) != 0;
+                cpu.reg_psr.z = value == 0;
+                cpu.reg_a = value;
+            }
         },
-        EmulationMode::Native => {
-            let value = address.read_word(cpu, bus);
-            cpu.reg_psr.n = value & (1 << 15) != 0;
-            cpu.reg_psr.z = value == 0;
+        _ => match cpu.reg_psr.e {
+            EmulationMode::Emulation => {
+                let value = address.read_byte(cpu, bus);
+                cpu.reg_psr.n = value & (1 << 7) != 0;
+                cpu.reg_psr.z = value == 0;
+                cpu.reg_a = (cpu.reg_a & !0xFF) | value as u16;
+            },
+            EmulationMode::Native => {
+                let value = address.read_word(cpu, bus);
+                cpu.reg_psr.n = value & (1 << 15) != 0;
+                cpu.reg_psr.z = value == 0;
+                cpu.reg_a = value;
+            }
         }
     }
-
-    cpu.cycles += 2;
 }
 
 /// LDX (A2) - Load X
@@ -227,16 +256,34 @@ fn ldx(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
     let address: AddressingMode = mode(cpu, bus);
 
     cpu.cycles += 2;
-    match cpu.reg_psr.e {
-        EmulationMode::Emulation => {
-            let value = address.read_byte(cpu, bus);
-            cpu.reg_psr.n = value & (1 << 7) != 0;
-            cpu.reg_psr.z = value == 0;
+    match address {
+        AddressingMode::Immediate => match cpu.reg_psr.m {
+            true => {
+                let value = address.read_byte(cpu, bus);
+                cpu.reg_psr.n = value & (1 << 7) != 0;
+                cpu.reg_psr.z = value == 0;
+                cpu.reg_x = (cpu.reg_x & !0xFF) | value as u16;
+            },
+            false => {
+                let value = address.read_word(cpu, bus);
+                cpu.reg_psr.n = value & (1 << 15) != 0;
+                cpu.reg_psr.z = value == 0;
+                cpu.reg_x = value;
+            }
         },
-        EmulationMode::Native => {
-            let value = address.read_word(cpu, bus);
-            cpu.reg_psr.n = value & (1 << 15) != 0;
-            cpu.reg_psr.z = value == 0;
+        _ => match cpu.reg_psr.e {
+            EmulationMode::Emulation => {
+                let value = address.read_byte(cpu, bus);
+                cpu.reg_psr.n = value & (1 << 7) != 0;
+                cpu.reg_psr.z = value == 0;
+                cpu.reg_x = (cpu.reg_x & !0xFF) | value as u16;
+            },
+            EmulationMode::Native => {
+                let value = address.read_word(cpu, bus);
+                cpu.reg_psr.n = value & (1 << 15) != 0;
+                cpu.reg_psr.z = value == 0;
+                cpu.reg_x = value;
+            }
         }
     }
 }
@@ -246,16 +293,34 @@ fn ldy(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
     let address: AddressingMode = mode(cpu, bus);
 
     cpu.cycles += 2;
-    match cpu.reg_psr.e {
-        EmulationMode::Emulation => {
-            let value = address.read_byte(cpu, bus);
-            cpu.reg_psr.n = value & (1 << 7) != 0;
-            cpu.reg_psr.z = value == 0;
+    match address {
+        AddressingMode::Immediate => match cpu.reg_psr.x {
+            true => {
+                let value = address.read_byte(cpu, bus);
+                cpu.reg_psr.n = value & (1 << 7) != 0;
+                cpu.reg_psr.z = value == 0;
+                cpu.reg_y = (cpu.reg_y & !0xFF) | value as u16;
+            },
+            false => {
+                let value = address.read_word(cpu, bus);
+                cpu.reg_psr.n = (value as u16) & (1 << 15) != 0;
+                cpu.reg_psr.z = value == 0;
+                cpu.reg_y = value;
+            }
         },
-        EmulationMode::Native => {
-            let value = address.read_word(cpu, bus);
-            cpu.reg_psr.n = (value as u16) & (1 << 15) != 0;
-            cpu.reg_psr.z = value == 0;
+        _ => match cpu.reg_psr.e {
+            EmulationMode::Emulation => {
+                let value = address.read_byte(cpu, bus);
+                cpu.reg_psr.n = value & (1 << 7) != 0;
+                cpu.reg_psr.z = value == 0;
+                cpu.reg_y = (cpu.reg_y & !0xFF) | value as u16;
+            },
+            EmulationMode::Native => {
+                let value = address.read_word(cpu, bus);
+                cpu.reg_psr.n = (value as u16) & (1 << 15) != 0;
+                cpu.reg_psr.z = value == 0;
+                cpu.reg_y = value;
+            }
         }
     }
 }
@@ -275,11 +340,11 @@ fn sta(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
     let (bank, addr) = mode(cpu, bus).address(cpu, bus);
 
     cpu.cycles += 4;
-    match cpu.reg_psr.e {
-        EmulationMode::Emulation => {
+    match cpu.reg_psr.x {
+        true => {
             bus.write(bank, addr, cpu.reg_a as u8);
         },
-        EmulationMode::Native => {
+        false => {
             // TODO: Figure out if this is correct
             bus.write(bank, addr, cpu.reg_a as u8);
             let addr = addr.wrapping_add(1);
@@ -395,6 +460,7 @@ fn brl(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
 /// JSR (20, FC) - Jump
 fn jsr(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
     let (_, addr) = mode(cpu, bus).address(cpu, bus);
+    println!("{:#X}", addr);
 
     cpu.push_stack(bus, cpu.reg_pc as u8);
     cpu.push_stack(bus, (cpu.reg_pc >> 8) as u8);
@@ -445,7 +511,7 @@ fn brk(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
     let new_reg_pc = cpu.reg_pc.wrapping_add(2);
 
     // TODO: Cycles?
-    cpu.reg_psr.b = true;
+    cpu.reg_psr.x = true;
     cpu.push_stack(bus, new_reg_pc as u8);
     cpu.push_stack(bus, (new_reg_pc >> 8) as u8);
     cpu.push_stack(bus, cpu.reg_db as u8);
@@ -494,12 +560,20 @@ fn sei(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
 
 /// REP (C2) - Reset Status Bits
 fn rep(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
-    let value: u8 = match mode(cpu, bus) {
-        AddressingMode::ImmediateB(value) => value,
-        _ => panic!("REP: Invalid AddressingMode")
-    };
+    let address: AddressingMode = mode(cpu, bus);
+    let value = address.read_byte(cpu, bus);
 
     let registers = cpu.reg_psr.as_u8() & !value;
+    cpu.reg_psr.set_from_u8(registers);
+    cpu.cycles += 3;
+}
+
+/// SEP (E2) - Reset Status Bits
+fn sep(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
+    let address: AddressingMode = mode(cpu, bus);
+    let value = address.read_byte(cpu, bus);
+
+    let registers = cpu.reg_psr.as_u8() | value;
     cpu.reg_psr.set_from_u8(registers);
     cpu.cycles += 3;
 }
@@ -514,6 +588,7 @@ fn xce(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
     let temp = cpu.reg_psr.c;
     cpu.reg_psr.c = cpu.reg_psr.e == Emulation;
     cpu.reg_psr.e = if temp { Emulation } else { Native };
+    cpu.reg_psr.m = temp;
     cpu.cycles += 2;
 }
 
@@ -535,8 +610,8 @@ struct ProcessorStatusRegister {
     z: bool, // Zero
     i: bool, // Interrupt disable
     d: bool, // Decimal mode
-    b: bool, // Break flag (also known as X)
-    u: bool, // Unused (also known as M)
+    x: bool, // Index flag (Break flag in emulation mode)
+    m: bool, // Memory flag
     v: bool, // Overflow
     n: bool, // Negative (Sign)
     e: EmulationMode, // 6502 Emulation mode
@@ -548,19 +623,21 @@ impl ProcessorStatusRegister {
         ((self.z as u8) << 1) +
         ((self.i as u8) << 2) +
         ((self.d as u8) << 3) +
-        ((self.b as u8) << 4) +
-        ((self.u as u8) << 5) +
+        ((self.x as u8) << 4) +
+        ((self.m as u8) << 5) +
         ((self.v as u8) << 6) +
         ((self.n as u8) << 7)
     }
 
     fn set_from_u8(&mut self, flags: u8) {
-        // self.u is always 1, cannot be set
         self.c = flags & 0b0000_0001 != 0;
         self.z = flags & 0b0000_0010 != 0;
         self.i = flags & 0b0000_0100 != 0;
         self.d = flags & 0b0000_1000 != 0;
-        self.b = flags & 0b0001_0000 != 0;
+        self.x = flags & 0b0001_0000 != 0;
+        if self.e == EmulationMode::Native {
+            self.m = flags & 0b0010_0000 != 0;
+        }
         self.v = flags & 0b0100_0000 != 0;
         self.n = flags & 0b1000_0000 != 0;
     }
@@ -573,8 +650,8 @@ impl Default for ProcessorStatusRegister {
             z: false,
             i: false,
             d: false,
-            b: false,
-            u: true,
+            x: false,
+            m: true,
             v: false,
             n: false,
             e: EmulationMode::Emulation
