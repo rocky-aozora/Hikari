@@ -1,71 +1,61 @@
 use super::mem::MemoryBus;
 
 #[derive(Debug)]
-pub enum Opcode {
-    Tcd,
-    Tcs,
-    Lda,
-    Ldx,
-    Ldy,
-    Stz,
-    Sta,
-    Ora,
-    Sbc,
-    Dex,
-    Tsb,
-    Brl,
-    Jsr,
-    Rti,
-    Bmi,
-    Bne,
-    Brk,
-    Clc,
-    Sei,
-    Rep,
-    Sep,
-    Xce
-}
-
-pub struct Instruction {
-    pub op: Opcode,
-    mode: AddressingModeFn,
-    func: InstructionFn
+pub enum Instruction {
+    Tcd(AddressingMode),
+    Tcs(AddressingMode),
+    Lda(AddressingMode),
+    Ldx(AddressingMode),
+    Ldy(AddressingMode),
+    Stz(AddressingMode),
+    Sta(AddressingMode),
+    Ora(AddressingMode),
+    Sbc(AddressingMode),
+    Dex(AddressingMode),
+    Tsb(AddressingMode),
+    Brl(AddressingMode),
+    Jsr(AddressingMode),
+    Rti(AddressingMode),
+    Bmi(AddressingMode),
+    Bne(AddressingMode),
+    Brk(AddressingMode),
+    Clc(AddressingMode),
+    Sei(AddressingMode),
+    Rep(AddressingMode),
+    Sep(AddressingMode),
+    Xce(AddressingMode)
 }
 
 impl Instruction {
     pub fn new(op: u8) -> Self {
+        use AddressingMode::*;
         match op {
-            0x5B => Instruction { op: Opcode::Tcd, func: tcd, mode: implied },
-            0x1B => Instruction { op: Opcode::Tcs, func: tcs, mode: implied },
-            0xA9 => Instruction { op: Opcode::Lda, func: lda, mode: immediate },
-            0xA2 => Instruction { op: Opcode::Ldx, func: ldx, mode: immediate },
-            0xAC => Instruction { op: Opcode::Ldy, func: ldy, mode: absolute },
-            0x9C => Instruction { op: Opcode::Stz, func: stz, mode: absolute },
-            0x85 => Instruction { op: Opcode::Sta, func: sta, mode: direct_page },
-            0x8D => Instruction { op: Opcode::Sta, func: sta, mode: absolute },
-            0x03 => Instruction { op: Opcode::Ora, func: ora, mode: stack_relative },
-            0x01 => Instruction { op: Opcode::Ora, func: ora, mode: indirect_x },
-            0xFF => Instruction { op: Opcode::Sbc, func: sbc, mode: long },
-            0xCA => Instruction { op: Opcode::Dex, func: dex, mode: implied },
-            0x04 => Instruction { op: Opcode::Tsb, func: tsb, mode: direct_page },
-            0x82 => Instruction { op: Opcode::Brl, func: brl, mode: absolute },
-            0x20 => Instruction { op: Opcode::Jsr, func: jsr, mode: absolute },
-            0xFC => Instruction { op: Opcode::Jsr, func: jsr, mode: absolute_x },
-            0x40 => Instruction { op: Opcode::Rti, func: rti, mode: implied },
-            0x30 => Instruction { op: Opcode::Bmi, func: bmi, mode: immediate },
-            0xD0 => Instruction { op: Opcode::Bne, func: bne, mode: immediate },
-            0x00 => Instruction { op: Opcode::Brk, func: brk, mode: implied },
-            0x18 => Instruction { op: Opcode::Clc, func: clc, mode: implied },
-            0x78 => Instruction { op: Opcode::Sei, func: sei, mode: implied },
-            0xC2 => Instruction { op: Opcode::Rep, func: rep, mode: immediate },
-            0xE2 => Instruction { op: Opcode::Sep, func: sep, mode: immediate },
-            0xFB => Instruction { op: Opcode::Xce, func: xce, mode: implied },
-            _ => panic!("Unimplemented opcode {:X}", op)
+            0x5B => Instruction::Tcd(Implied),
+            0x1B => Instruction::Tcs(Implied),
+            0xA9 => Instruction::Lda(Immediate),
+            0xA2 => Instruction::Ldx(Immediate),
+            0xAC => Instruction::Ldy(Absolute),
+            0x9C => Instruction::Stz(Absolute),
+            0x85 => Instruction::Sta(DirectPage),
+            0x8D => Instruction::Sta(Absolute),
+            0x03 => Instruction::Ora(StackRelative),
+            0xFF => Instruction::Sbc(Long),
+            0xCA => Instruction::Dex(Implied),
+            0x04 => Instruction::Tsb(DirectPage),
+            0x82 => Instruction::Brl(Absolute),
+            0x20 => Instruction::Jsr(Absolute),
+            0xFC => Instruction::Jsr(AbsoluteX),
+            0x40 => Instruction::Rti(Implied),
+            0x30 => Instruction::Bmi(Immediate),
+            0xD0 => Instruction::Bne(Immediate),
+            0x00 => Instruction::Brk(Implied),
+            0x18 => Instruction::Clc(Implied),
+            0x78 => Instruction::Sei(Implied),
+            0xC2 => Instruction::Rep(Immediate),
+            0xE2 => Instruction::Sep(Immediate),
+            0xFB => Instruction::Xce(Implied),
+            _ => panic!("Unimplemented instruction {:X}", op)
         }
-    }
-
-    fn exec(&self, cpu: &mut Core, bus: &mut MemoryBus) {
-        (self.func)(cpu, bus, self.mode);
     }
 }
 
@@ -73,15 +63,14 @@ impl Instruction {
 /// An `AddressingMode` determines what data an `Instruction` is operating on.
 /// They are implemented as a function (`AddressingModeFn`) on the cpu that
 /// fetches some data which the instruction can use to perform its logic with.
-#[derive(PartialEq)]
-enum AddressingMode {
+#[derive(Debug, PartialEq)]
+pub enum AddressingMode {
     Immediate,
-    Absolute(u16),
-    AbsoluteX(u16),
-    DirectPage(u8),
-    IndirectX(u16),
-    StackRelative(u16),
-    Long(u8, u16),
+    Absolute,
+    AbsoluteX,
+    DirectPage,
+    StackRelative,
+    Long,
     Implied
 }
 
@@ -112,20 +101,18 @@ impl AddressingMode {
 
     fn address(self, cpu: &mut Core, bus: &MemoryBus) -> (u8, u16) {
         match self {
-            AddressingMode::Absolute(addr) => (cpu.reg_db, addr),
-            AddressingMode::AbsoluteX(addr) => (cpu.reg_db, addr),
-            AddressingMode::IndirectX(indirect_addr) => {
-                let addr_lo = bus.read(cpu.reg_db, indirect_addr) as u16;
-                let indirect_addr = indirect_addr.wrapping_add(1);
-                let addr_hi = bus.read(cpu.reg_db, indirect_addr) as u16;
-
-                let addr = (addr_hi << 8) | addr_lo;
-                (cpu.reg_db, addr)
+            AddressingMode::Absolute => (cpu.reg_db, cpu.read_word(bus)),
+            AddressingMode::AbsoluteX =>
+                (cpu.reg_db, cpu.read_word(bus).wrapping_add(cpu.reg_x)),
+            AddressingMode::DirectPage => {
+                let addr = cpu.read_byte(bus) as u16;
+                (0x00, cpu.reg_d.wrapping_add(addr as u16))
             },
-            AddressingMode::StackRelative(offset) =>
-                (cpu.reg_db, cpu.reg_sp.wrapping_add(offset)),
-            AddressingMode::Long(bank, addr) => (bank, addr),
-            AddressingMode::DirectPage(addr) => (0x00, cpu.reg_d.wrapping_add(addr as u16)),
+            AddressingMode::StackRelative => {
+                let offset = bus.read(cpu.reg_db, cpu.reg_pc) as u16;
+                (cpu.reg_db, cpu.reg_sp.wrapping_add(offset))
+            },
+            AddressingMode::Long => (cpu.read_byte(bus), cpu.read_word(bus)),
             AddressingMode::Implied =>
                 panic!("AddressingMode: attempting to address an implied address"),
             AddressingMode::Immediate =>
@@ -135,64 +122,16 @@ impl AddressingMode {
 }
 
 
-type AddressingModeFn = fn(&mut Core, &MemoryBus) -> AddressingMode;
-
-fn implied(_: &mut Core, _: &MemoryBus) -> AddressingMode {
-    AddressingMode::Implied
-}
-
-fn immediate(_: &mut Core, _: &MemoryBus) -> AddressingMode {
-    AddressingMode::Immediate
-}
-
-fn absolute(cpu: &mut Core, bus: &MemoryBus) -> AddressingMode {
-    let addr = cpu.read_word(bus);
-    AddressingMode::Absolute(addr)
-}
-
-fn absolute_x(cpu: &mut Core, bus: &MemoryBus) -> AddressingMode {
-    let addr = cpu.read_word(bus).wrapping_add(cpu.reg_x);
-    AddressingMode::AbsoluteX(addr)
-}
-
-fn direct_page(cpu: &mut Core, bus: &MemoryBus) -> AddressingMode {
-    let addr = bus.read(cpu.reg_db, cpu.reg_pc);
-    cpu.reg_pc = cpu.reg_pc.wrapping_add(1);
-    AddressingMode::DirectPage(addr)
-}
-
-fn indirect_x(cpu: &mut Core, bus: &MemoryBus) -> AddressingMode {
-    let addr_index = cpu.reg_pc.wrapping_add(cpu.reg_d);
-    let indirect_addr = bus.read(cpu.reg_db, addr_index) as u16;
-    cpu.reg_pc = cpu.reg_pc.wrapping_add(1);
-
-    AddressingMode::IndirectX(indirect_addr)
-}
-
-fn stack_relative(cpu: &mut Core, bus: &MemoryBus) -> AddressingMode {
-    let offset = bus.read(cpu.reg_db, cpu.reg_pc) as u16;
-    AddressingMode::StackRelative(offset)
-}
-
-fn long(cpu: &mut Core, bus: &MemoryBus) -> AddressingMode {
-    let bank = bus.read(cpu.reg_db, cpu.reg_pc);
-    cpu.reg_pc = cpu.reg_pc.wrapping_add(1);
-
-    let addr = cpu.read_word(bus);
-    AddressingMode::Long(bank, addr)
-}
-
 /// An `Instruction` is the implementation of the 65816 CPU instruction related to
 /// the opcode. An instruction performs its logic on the CPU and can use different
 /// `AddressingMode`s to be able to work on different types of data.
-type InstructionFn = fn(&mut Core, &mut MemoryBus, AddressingModeFn) -> ();
-
+type InstructionFn = fn(&mut Core, &mut MemoryBus, AddressingMode) -> ();
 
 // Register to Register Transfer
 
 /// TCD (5B) - Transfer A to D
-fn tcd(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
-    if mode(cpu, bus) != AddressingMode::Implied {
+fn tcd(cpu: &mut Core, _: &mut MemoryBus, mode: AddressingMode) {
+    if mode != AddressingMode::Implied {
         panic!("TCD: Invalid AddressingMode");
     }
 
@@ -203,8 +142,8 @@ fn tcd(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
 }
 
 /// TCS (1B) - Transfer A to SP
-fn tcs(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
-    if mode(cpu, bus) != AddressingMode::Implied {
+fn tcs(cpu: &mut Core, _: &mut MemoryBus, mode: AddressingMode) {
+    if mode != AddressingMode::Implied {
         panic!("TCS: Invalid AddressingMode");
     }
 
@@ -215,20 +154,18 @@ fn tcs(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
 // Load Register from Memory
 
 /// LDA (A9) - Load Accumulator
-fn lda(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
-    let address: AddressingMode = mode(cpu, bus);
-
+fn lda(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingMode) {
     cpu.cycles += 2;
-    match address {
+    match mode {
         AddressingMode::Immediate => match cpu.reg_psr.m {
             true => {
-                let value = address.read_byte(cpu, bus);
+                let value = mode.read_byte(cpu, bus);
                 cpu.reg_psr.n = value & (1 << 7) != 0;
                 cpu.reg_psr.z = value == 0;
                 cpu.reg_a = (cpu.reg_a & !0xFF) | value as u16;
             },
             false => {
-                let value = address.read_word(cpu, bus);
+                let value = mode.read_word(cpu, bus);
                 cpu.reg_psr.n = value & (1 << 15) != 0;
                 cpu.reg_psr.z = value == 0;
                 cpu.reg_a = value;
@@ -236,13 +173,13 @@ fn lda(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
         },
         _ => match cpu.reg_psr.e {
             EmulationMode::Emulation => {
-                let value = address.read_byte(cpu, bus);
+                let value = mode.read_byte(cpu, bus);
                 cpu.reg_psr.n = value & (1 << 7) != 0;
                 cpu.reg_psr.z = value == 0;
                 cpu.reg_a = (cpu.reg_a & !0xFF) | value as u16;
             },
             EmulationMode::Native => {
-                let value = address.read_word(cpu, bus);
+                let value = mode.read_word(cpu, bus);
                 cpu.reg_psr.n = value & (1 << 15) != 0;
                 cpu.reg_psr.z = value == 0;
                 cpu.reg_a = value;
@@ -252,20 +189,18 @@ fn lda(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
 }
 
 /// LDX (A2) - Load X
-fn ldx(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
-    let address: AddressingMode = mode(cpu, bus);
-
+fn ldx(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingMode) {
     cpu.cycles += 2;
-    match address {
+    match mode {
         AddressingMode::Immediate => match cpu.reg_psr.m {
             true => {
-                let value = address.read_byte(cpu, bus);
+                let value = mode.read_byte(cpu, bus);
                 cpu.reg_psr.n = value & (1 << 7) != 0;
                 cpu.reg_psr.z = value == 0;
                 cpu.reg_x = (cpu.reg_x & !0xFF) | value as u16;
             },
             false => {
-                let value = address.read_word(cpu, bus);
+                let value = mode.read_word(cpu, bus);
                 cpu.reg_psr.n = value & (1 << 15) != 0;
                 cpu.reg_psr.z = value == 0;
                 cpu.reg_x = value;
@@ -273,13 +208,13 @@ fn ldx(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
         },
         _ => match cpu.reg_psr.e {
             EmulationMode::Emulation => {
-                let value = address.read_byte(cpu, bus);
+                let value = mode.read_byte(cpu, bus);
                 cpu.reg_psr.n = value & (1 << 7) != 0;
                 cpu.reg_psr.z = value == 0;
                 cpu.reg_x = (cpu.reg_x & !0xFF) | value as u16;
             },
             EmulationMode::Native => {
-                let value = address.read_word(cpu, bus);
+                let value = mode.read_word(cpu, bus);
                 cpu.reg_psr.n = value & (1 << 15) != 0;
                 cpu.reg_psr.z = value == 0;
                 cpu.reg_x = value;
@@ -289,20 +224,18 @@ fn ldx(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
 }
 
 /// LDY (AC) - Load Y
-fn ldy(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
-    let address: AddressingMode = mode(cpu, bus);
-
+fn ldy(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingMode) {
     cpu.cycles += 2;
-    match address {
+    match mode {
         AddressingMode::Immediate => match cpu.reg_psr.x {
             true => {
-                let value = address.read_byte(cpu, bus);
+                let value = mode.read_byte(cpu, bus);
                 cpu.reg_psr.n = value & (1 << 7) != 0;
                 cpu.reg_psr.z = value == 0;
                 cpu.reg_y = (cpu.reg_y & !0xFF) | value as u16;
             },
             false => {
-                let value = address.read_word(cpu, bus);
+                let value = mode.read_word(cpu, bus);
                 cpu.reg_psr.n = (value as u16) & (1 << 15) != 0;
                 cpu.reg_psr.z = value == 0;
                 cpu.reg_y = value;
@@ -310,13 +243,13 @@ fn ldy(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
         },
         _ => match cpu.reg_psr.e {
             EmulationMode::Emulation => {
-                let value = address.read_byte(cpu, bus);
+                let value = mode.read_byte(cpu, bus);
                 cpu.reg_psr.n = value & (1 << 7) != 0;
                 cpu.reg_psr.z = value == 0;
                 cpu.reg_y = (cpu.reg_y & !0xFF) | value as u16;
             },
             EmulationMode::Native => {
-                let value = address.read_word(cpu, bus);
+                let value = mode.read_word(cpu, bus);
                 cpu.reg_psr.n = (value as u16) & (1 << 15) != 0;
                 cpu.reg_psr.z = value == 0;
                 cpu.reg_y = value;
@@ -328,16 +261,16 @@ fn ldy(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
 // Store Register in Memory
 
 /// STZ (9C) - Store Zero
-fn stz(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
-    let (bank, addr) = mode(cpu, bus).address(cpu, bus);
+fn stz(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingMode) {
+    let (bank, addr) = mode.address(cpu, bus);
 
     bus.write(bank, addr, 0);
     cpu.cycles += 4;
 }
 
 /// STA (8D) - Store Accumulator
-fn sta(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
-    let (bank, addr) = mode(cpu, bus).address(cpu, bus);
+fn sta(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingMode) {
+    let (bank, addr) = mode.address(cpu, bus);
 
     cpu.cycles += 4;
     match cpu.reg_psr.x {
@@ -356,30 +289,26 @@ fn sta(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
 // Arithmetic/Logical operations
 
 /// ORA (03, 01) - ALU Or
-fn ora(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
-    let address: AddressingMode = mode(cpu, bus);
-
+fn ora(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingMode) {
     cpu.cycles += 6;
     match cpu.reg_psr.e {
         EmulationMode::Emulation => {
-            let value = address.read_byte(cpu, bus);
+            let value = mode.read_byte(cpu, bus);
             cpu.reg_a = (cpu.reg_a as u8 | value) as u16;
         },
         EmulationMode::Native => {
-            let value = address.read_word(cpu, bus);
+            let value = mode.read_word(cpu, bus);
             cpu.reg_a = cpu.reg_a | value;
         }
     }
 }
 
 /// SBC (FF) - ALU Subtract
-fn sbc(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
-    let address: AddressingMode = mode(cpu, bus);
-
+fn sbc(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingMode) {
     cpu.cycles += 5;
     match cpu.reg_psr.e {
         EmulationMode::Emulation => {
-            let value = address.read_byte(cpu, bus) as u16;
+            let value = mode.read_byte(cpu, bus) as u16;
             let carry = cpu.reg_psr.c as u16;
             let res = (cpu.reg_a as u16).wrapping_add(carry)
                                         .wrapping_sub(1)
@@ -390,7 +319,7 @@ fn sbc(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
             cpu.reg_psr.z = value == 0;
         },
         EmulationMode::Native => {
-            let value = address.read_word(cpu, bus) as u32;
+            let value = mode.read_word(cpu, bus) as u32;
             let carry = cpu.reg_psr.c as u32;
             let res = (cpu.reg_a as u32).wrapping_add(carry)
                                         .wrapping_sub(1)
@@ -404,8 +333,8 @@ fn sbc(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
 }
 
 /// DEX (CA) - Decrement X
-fn dex(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
-    if mode(cpu, bus) != AddressingMode::Implied {
+fn dex(cpu: &mut Core, _: &mut MemoryBus, mode: AddressingMode) {
+    if mode != AddressingMode::Implied {
         panic!("DEX: Invalid AddressingMode");
     }
 
@@ -425,18 +354,16 @@ fn dex(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
 }
 
 /// TSB (04) - Test bit
-fn tsb(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
-    let address: AddressingMode = mode(cpu, bus);
-
+fn tsb(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingMode) {
     cpu.cycles += 6;
     match cpu.reg_psr.e {
         EmulationMode::Emulation => {
             let mask = (cpu.reg_a & 0x00FF) as u8;
-            let value = address.read_byte(cpu, bus);
+            let value = mode.read_byte(cpu, bus);
             cpu.reg_psr.z = value & mask == 0;
         },
         EmulationMode::Native => {
-            let value = address.read_word(cpu, bus);
+            let value = mode.read_word(cpu, bus);
             cpu.reg_psr.z = value & cpu.reg_a == 0;
         }
     };
@@ -445,8 +372,8 @@ fn tsb(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
 // Normal Jumps
 
 /// BRL (30) - Branch Long
-fn brl(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
-    let (_, addr) = mode(cpu, bus).address(cpu, bus);
+fn brl(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingMode) {
+    let (_, addr) = mode.address(cpu, bus);
 
     let sign = addr & (1 << 15) == 0;
     cpu.reg_pc = if sign {
@@ -458,9 +385,8 @@ fn brl(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
 }
 
 /// JSR (20, FC) - Jump
-fn jsr(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
-    let (_, addr) = mode(cpu, bus).address(cpu, bus);
-    println!("{:#X}", addr);
+fn jsr(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingMode) {
+    let (_, addr) = mode.address(cpu, bus);
 
     cpu.push_stack(bus, cpu.reg_pc as u8);
     cpu.push_stack(bus, (cpu.reg_pc >> 8) as u8);
@@ -469,8 +395,8 @@ fn jsr(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
 }
 
 /// RTI (40) - Return from Interrupt
-fn rti(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
-    if mode(cpu, bus) != AddressingMode::Implied {
+fn rti(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingMode) {
+    if mode != AddressingMode::Implied {
         panic!("RTI: Invalid AddressingMode");
     }
 
@@ -488,22 +414,22 @@ fn rti(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
 // Conditional Branches
 
 /// BMI (30) - Branch if Minus
-fn bmi(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
-    let (_, addr) = mode(cpu, bus).address(cpu, bus);
+fn bmi(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingMode) {
+    let (_, addr) = mode.address(cpu, bus);
     cpu.branch(addr, cpu.reg_psr.n);
 }
 
 /// BNE (D0) - Branch if not zero
-fn bne(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
-    let (_, addr) = mode(cpu, bus).address(cpu, bus);
+fn bne(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingMode) {
+    let (_, addr) = mode.address(cpu, bus);
     cpu.branch(addr, !cpu.reg_psr.z);
 }
 
 // Interrupts, Exceptions and Breakpoints
 
 /// BRK (00) - Break
-fn brk(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
-    if mode(cpu, bus) != AddressingMode::Implied {
+fn brk(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingMode) {
+    if mode != AddressingMode::Implied {
         panic!("BRK: Invalid AddressingMode");
     }
 
@@ -539,8 +465,8 @@ fn brk(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
 // CPU Control
 
 /// CLC (18) - Clear carry flag
-fn clc(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
-    if mode(cpu, bus) != AddressingMode::Implied {
+fn clc(cpu: &mut Core, _: &mut MemoryBus, mode: AddressingMode) {
+    if mode != AddressingMode::Implied {
         panic!("CLC: Invalid AddressingMode");
     }
 
@@ -549,8 +475,8 @@ fn clc(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
 }
 
 /// SEI (78) - Set interrupt disable bit
-fn sei(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
-    if mode(cpu, bus) != AddressingMode::Implied {
+fn sei(cpu: &mut Core, _: &mut MemoryBus, mode: AddressingMode) {
+    if mode != AddressingMode::Implied {
         panic!("SEI: Invalid AddressingMode");
     }
 
@@ -559,28 +485,24 @@ fn sei(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
 }
 
 /// REP (C2) - Reset Status Bits
-fn rep(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
-    let address: AddressingMode = mode(cpu, bus);
-    let value = address.read_byte(cpu, bus);
-
+fn rep(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingMode) {
+    let value = mode.read_byte(cpu, bus);
     let registers = cpu.reg_psr.as_u8() & !value;
     cpu.reg_psr.set_from_u8(registers);
     cpu.cycles += 3;
 }
 
 /// SEP (E2) - Reset Status Bits
-fn sep(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
-    let address: AddressingMode = mode(cpu, bus);
-    let value = address.read_byte(cpu, bus);
-
+fn sep(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingMode) {
+    let value = mode.read_byte(cpu, bus);
     let registers = cpu.reg_psr.as_u8() | value;
     cpu.reg_psr.set_from_u8(registers);
     cpu.cycles += 3;
 }
 
 /// XCE (FB) - Swap C and E
-fn xce(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingModeFn) {
-    if mode(cpu, bus) != AddressingMode::Implied {
+fn xce(cpu: &mut Core, _: &mut MemoryBus, mode: AddressingMode) {
+    if mode != AddressingMode::Implied {
         panic!("SEI: Invalid AddressingMode");
     }
 
@@ -687,8 +609,30 @@ impl Core {
     }
 
     pub fn run_cycle(&mut self, bus: &mut MemoryBus) {
-        let instr_byte = self.read_byte(bus);
-        Instruction::new(instr_byte).exec(self, bus);
+        match Instruction::new(self.read_byte(bus)) {
+            Instruction::Tcd(mode) => tcd(self, bus, mode),
+            Instruction::Tcs(mode) => tcs(self, bus, mode),
+            Instruction::Lda(mode) => lda(self, bus, mode),
+            Instruction::Ldx(mode) => ldx(self, bus, mode),
+            Instruction::Ldy(mode) => ldy(self, bus, mode),
+            Instruction::Stz(mode) => stz(self, bus, mode),
+            Instruction::Sta(mode) => sta(self, bus, mode),
+            Instruction::Ora(mode) => ora(self, bus, mode),
+            Instruction::Sbc(mode) => sbc(self, bus, mode),
+            Instruction::Dex(mode) => dex(self, bus, mode),
+            Instruction::Tsb(mode) => tsb(self, bus, mode),
+            Instruction::Brl(mode) => brl(self, bus, mode),
+            Instruction::Jsr(mode) => jsr(self, bus, mode),
+            Instruction::Rti(mode) => rti(self, bus, mode),
+            Instruction::Bmi(mode) => bmi(self, bus, mode),
+            Instruction::Bne(mode) => bne(self, bus, mode),
+            Instruction::Brk(mode) => brk(self, bus, mode),
+            Instruction::Clc(mode) => clc(self, bus, mode),
+            Instruction::Sei(mode) => sei(self, bus, mode),
+            Instruction::Rep(mode) => rep(self, bus, mode),
+            Instruction::Sep(mode) => sep(self, bus, mode),
+            Instruction::Xce(mode) => xce(self, bus, mode)
+        }
     }
 
     fn read_byte(&mut self, bus: &MemoryBus) -> u8 {

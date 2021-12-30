@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 
 use crate::sfc::SuperFamicom;
-use crate::sfc::cpu::{Instruction, Opcode};
+use crate::sfc::cpu::Instruction;
 use crate::sfc::mem::Addr;
 
 
@@ -65,8 +65,7 @@ impl Debugger {
         let instr = self.inspect_instr_at(addr);
 
         let full_addr: u32 = ((current_db as u32) << 16) | current_pc as u32;
-        let instr_dbg = format!("{:?}", instr);
-        println!("${:06X}: {}", full_addr, instr_dbg.to_uppercase());
+        println!("${:06X}: {:?}", full_addr, instr);
 
         if current_pc == self.break_point {
             true
@@ -84,14 +83,14 @@ impl Debugger {
         self.device.bus().cart().print_header();
     }
 
-    fn inspect_instr_at(&self, addr: Addr) -> Opcode {
-        let data = match addr {
+    fn inspect_instr_at(&self, addr: Addr) -> Instruction {
+        let op = match addr {
             Addr::RomSel(bank, addr) =>
                 self.device.bus().cart().read(bank, addr),
             _ => panic!("Debugger: cannot inspect address: {:?}", addr)
         };
 
-        Instruction::new(data).op
+        Instruction::new(op)
     }
 }
 
