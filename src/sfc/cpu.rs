@@ -28,32 +28,33 @@ pub enum Instruction {
 
 impl Instruction {
     pub fn new(op: u8) -> Self {
+        use Instruction::*;
         use AddressingMode::*;
         match op {
-            0x5B => Instruction::Tcd(Implied),
-            0x1B => Instruction::Tcs(Implied),
-            0xA9 => Instruction::Lda(Immediate),
-            0xA2 => Instruction::Ldx(Immediate),
-            0xAC => Instruction::Ldy(Absolute),
-            0x9C => Instruction::Stz(Absolute),
-            0x85 => Instruction::Sta(DirectPage),
-            0x8D => Instruction::Sta(Absolute),
-            0x03 => Instruction::Ora(StackRelative),
-            0xFF => Instruction::Sbc(Long),
-            0xCA => Instruction::Dex(Implied),
-            0x04 => Instruction::Tsb(DirectPage),
-            0x82 => Instruction::Brl(Absolute),
-            0x20 => Instruction::Jsr(Absolute),
-            0xFC => Instruction::Jsr(AbsoluteX),
-            0x40 => Instruction::Rti(Implied),
-            0x30 => Instruction::Bmi(Immediate),
-            0xD0 => Instruction::Bne(Immediate),
-            0x00 => Instruction::Brk(Implied),
-            0x18 => Instruction::Clc(Implied),
-            0x78 => Instruction::Sei(Implied),
-            0xC2 => Instruction::Rep(Immediate),
-            0xE2 => Instruction::Sep(Immediate),
-            0xFB => Instruction::Xce(Implied),
+            0x5B => Tcd(Implied),
+            0x1B => Tcs(Implied),
+            0xA9 => Lda(Immediate),
+            0xA2 => Ldx(Immediate),
+            0xAC => Ldy(Absolute),
+            0x9C => Stz(Absolute),
+            0x85 => Sta(DirectPage),
+            0x8D => Sta(Absolute),
+            0x03 => Ora(StackRelative),
+            0xFF => Sbc(Long),
+            0xCA => Dex(Implied),
+            0x04 => Tsb(DirectPage),
+            0x82 => Brl(Absolute),
+            0x20 => Jsr(Absolute),
+            0xFC => Jsr(AbsoluteX),
+            0x40 => Rti(Implied),
+            0x30 => Bmi(Immediate),
+            0xD0 => Bne(Immediate),
+            0x00 => Brk(Implied),
+            0x18 => Clc(Implied),
+            0x78 => Sei(Implied),
+            0xC2 => Rep(Immediate),
+            0xE2 => Sep(Immediate),
+            0xFB => Xce(Implied),
             _ => panic!("Unimplemented instruction {:X}", op)
         }
     }
@@ -156,34 +157,18 @@ fn tcs(cpu: &mut Core, _: &mut MemoryBus, mode: AddressingMode) {
 /// LDA (A9) - Load Accumulator
 fn lda(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingMode) {
     cpu.cycles += 2;
-    match mode {
-        AddressingMode::Immediate => match cpu.reg_psr.m {
-            true => {
-                let value = mode.read_byte(cpu, bus);
-                cpu.reg_psr.n = value & (1 << 7) != 0;
-                cpu.reg_psr.z = value == 0;
-                cpu.reg_a = (cpu.reg_a & !0xFF) | value as u16;
-            },
-            false => {
-                let value = mode.read_word(cpu, bus);
-                cpu.reg_psr.n = value & (1 << 15) != 0;
-                cpu.reg_psr.z = value == 0;
-                cpu.reg_a = value;
-            }
+    match cpu.target_reg_size(&mode, cpu.reg_psr.m) {
+        RegisterSize::Byte => {
+            let value = mode.read_byte(cpu, bus);
+            cpu.reg_psr.n = value & (1 << 7) != 0;
+            cpu.reg_psr.z = value == 0;
+            cpu.reg_a = (cpu.reg_a & !0xFF) | value as u16;
         },
-        _ => match cpu.reg_psr.e {
-            EmulationMode::Emulation => {
-                let value = mode.read_byte(cpu, bus);
-                cpu.reg_psr.n = value & (1 << 7) != 0;
-                cpu.reg_psr.z = value == 0;
-                cpu.reg_a = (cpu.reg_a & !0xFF) | value as u16;
-            },
-            EmulationMode::Native => {
-                let value = mode.read_word(cpu, bus);
-                cpu.reg_psr.n = value & (1 << 15) != 0;
-                cpu.reg_psr.z = value == 0;
-                cpu.reg_a = value;
-            }
+        RegisterSize::Word => {
+            let value = mode.read_word(cpu, bus);
+            cpu.reg_psr.n = value & (1 << 15) != 0;
+            cpu.reg_psr.z = value == 0;
+            cpu.reg_a = value;
         }
     }
 }
@@ -191,34 +176,18 @@ fn lda(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingMode) {
 /// LDX (A2) - Load X
 fn ldx(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingMode) {
     cpu.cycles += 2;
-    match mode {
-        AddressingMode::Immediate => match cpu.reg_psr.m {
-            true => {
-                let value = mode.read_byte(cpu, bus);
-                cpu.reg_psr.n = value & (1 << 7) != 0;
-                cpu.reg_psr.z = value == 0;
-                cpu.reg_x = (cpu.reg_x & !0xFF) | value as u16;
-            },
-            false => {
-                let value = mode.read_word(cpu, bus);
-                cpu.reg_psr.n = value & (1 << 15) != 0;
-                cpu.reg_psr.z = value == 0;
-                cpu.reg_x = value;
-            }
+    match cpu.target_reg_size(&mode, cpu.reg_psr.x) {
+        RegisterSize::Byte => {
+            let value = mode.read_byte(cpu, bus);
+            cpu.reg_psr.n = value & (1 << 7) != 0;
+            cpu.reg_psr.z = value == 0;
+            cpu.reg_x = (cpu.reg_x & !0xFF) | value as u16;
         },
-        _ => match cpu.reg_psr.e {
-            EmulationMode::Emulation => {
-                let value = mode.read_byte(cpu, bus);
-                cpu.reg_psr.n = value & (1 << 7) != 0;
-                cpu.reg_psr.z = value == 0;
-                cpu.reg_x = (cpu.reg_x & !0xFF) | value as u16;
-            },
-            EmulationMode::Native => {
-                let value = mode.read_word(cpu, bus);
-                cpu.reg_psr.n = value & (1 << 15) != 0;
-                cpu.reg_psr.z = value == 0;
-                cpu.reg_x = value;
-            }
+        RegisterSize::Word => {
+            let value = mode.read_word(cpu, bus);
+            cpu.reg_psr.n = value & (1 << 15) != 0;
+            cpu.reg_psr.z = value == 0;
+            cpu.reg_x = value;
         }
     }
 }
@@ -226,34 +195,18 @@ fn ldx(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingMode) {
 /// LDY (AC) - Load Y
 fn ldy(cpu: &mut Core, bus: &mut MemoryBus, mode: AddressingMode) {
     cpu.cycles += 2;
-    match mode {
-        AddressingMode::Immediate => match cpu.reg_psr.x {
-            true => {
-                let value = mode.read_byte(cpu, bus);
-                cpu.reg_psr.n = value & (1 << 7) != 0;
-                cpu.reg_psr.z = value == 0;
-                cpu.reg_y = (cpu.reg_y & !0xFF) | value as u16;
-            },
-            false => {
-                let value = mode.read_word(cpu, bus);
-                cpu.reg_psr.n = (value as u16) & (1 << 15) != 0;
-                cpu.reg_psr.z = value == 0;
-                cpu.reg_y = value;
-            }
+    match cpu.target_reg_size(&mode, cpu.reg_psr.x) {
+        RegisterSize::Byte => {
+            let value = mode.read_byte(cpu, bus);
+            cpu.reg_psr.n = value & (1 << 7) != 0;
+            cpu.reg_psr.z = value == 0;
+            cpu.reg_y = (cpu.reg_y & !0xFF) | value as u16;
         },
-        _ => match cpu.reg_psr.e {
-            EmulationMode::Emulation => {
-                let value = mode.read_byte(cpu, bus);
-                cpu.reg_psr.n = value & (1 << 7) != 0;
-                cpu.reg_psr.z = value == 0;
-                cpu.reg_y = (cpu.reg_y & !0xFF) | value as u16;
-            },
-            EmulationMode::Native => {
-                let value = mode.read_word(cpu, bus);
-                cpu.reg_psr.n = (value as u16) & (1 << 15) != 0;
-                cpu.reg_psr.z = value == 0;
-                cpu.reg_y = value;
-            }
+        RegisterSize::Word => {
+            let value = mode.read_word(cpu, bus);
+            cpu.reg_psr.n = (value as u16) & (1 << 15) != 0;
+            cpu.reg_psr.z = value == 0;
+            cpu.reg_y = value;
         }
     }
 }
@@ -581,6 +534,11 @@ impl Default for ProcessorStatusRegister {
     }
 }
 
+enum RegisterSize {
+    Byte,
+    Word
+}
+
 #[derive(Default, Debug)]
 pub struct Core {
     reg_a: u16,
@@ -635,12 +593,14 @@ impl Core {
         }
     }
 
+    #[inline(always)]
     fn read_byte(&mut self, bus: &MemoryBus) -> u8 {
         let value = bus.read(self.reg_db, self.reg_pc);
         self.reg_pc = self.reg_pc.wrapping_add(1);
         value
     }
 
+    #[inline(always)]
     fn read_word(&mut self, bus: &MemoryBus) -> u16 {
         let value_lo = bus.read(self.reg_db, self.reg_pc) as u16;
         self.reg_pc = self.reg_pc.wrapping_add(1);
@@ -660,6 +620,20 @@ impl Core {
             }
 
             self.reg_pc = absolute_addr;
+        }
+    }
+
+    #[inline]
+    fn target_reg_size(&self, mode: &AddressingMode, target_flag: bool) -> RegisterSize {
+        match mode {
+            AddressingMode::Immediate => match target_flag {
+                true => RegisterSize::Byte,
+                false => RegisterSize::Word
+            },
+            _ => match self.reg_psr.e {
+                EmulationMode::Emulation => RegisterSize::Byte,
+                EmulationMode::Native => RegisterSize::Word
+            }
         }
     }
 
