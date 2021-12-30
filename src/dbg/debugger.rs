@@ -59,13 +59,12 @@ impl Debugger {
     }
 
     fn step_emulator(&mut self) -> bool {
+        let bus = self.device.bus();
         let current_pc = self.device.cpu().reg_pc;
         let current_db = self.device.cpu().reg_db;
-        let addr = self.device.bus().resolve_addr(current_db, current_pc);
+        let addr = bus.resolve_addr(current_db, current_pc);
         let instr = self.inspect_instr_at(addr);
-
-        let full_addr: u32 = ((current_db as u32) << 16) | current_pc as u32;
-        println!("${:06X}: {:?}", full_addr, instr);
+        println!("${:02X}:{:04X}| {:?}", current_db, current_pc, instr);
 
         if current_pc == self.break_point {
             true
