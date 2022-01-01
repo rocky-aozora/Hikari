@@ -1,4 +1,5 @@
 use std::fmt;
+use fastrand;
 
 use super::cart::Cartridge;
 
@@ -33,7 +34,7 @@ impl MemoryBus {
         match self.resolve_addr(bank, addr) {
             Addr::Wram(offset) => self.wram[offset as usize],
             Addr::RomSel(bank, addr) => self.cart.read(bank, addr),
-            Addr::Io => 0,
+            Addr::Io => fastrand::u8(..),
         }
     }
 
@@ -53,14 +54,14 @@ impl MemoryBus {
                 0x2100..=0x21FF => Addr::Io,
                 0x4200..=0x5FFF => Addr::Io,
                 0x8000..=0xFFFF => Addr::RomSel(bank, addr),
-                _ => panic!("MemoryBus: unknown address ${:X}{:X}", addr, bank)
+                _ => panic!("MemoryBus: unknown address ${:02X}{:04X}", bank, addr)
             },
             0x40..=0x7D => Addr::RomSel(bank, addr),
             0x7E..=0x7F => Addr::Wram(addr as u32 + (bank as u32) - 0x7E),
             0x80..=0xBF => match addr {
                 0x0000..=0x1FFF => Addr::Wram(addr as u32 + ((bank - 0x80) as u32) * 0x2000),
                 0x8000..=0xFFFF => Addr::RomSel(bank, addr),
-                _ => panic!("MemoryBus: unknown address ${:X}{:X}", addr, bank)
+                _ => panic!("MemoryBus: unknown address ${:02X}{:04X}", bank, addr)
             },
             0xC0..=0xFF => Addr::RomSel(bank, addr)
         }

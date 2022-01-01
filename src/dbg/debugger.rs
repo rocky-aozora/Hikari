@@ -2,6 +2,7 @@ use std::io::{self, Write};
 
 use crate::sfc::SuperFamicom;
 use crate::sfc::cpu::Instruction;
+use crate::sfc::cpu::EmulationMode;
 use crate::sfc::mem::Addr;
 
 
@@ -53,6 +54,7 @@ impl Debugger {
     fn continue_emulator(&mut self) {
         loop {
             if self.step_emulator() {
+                self.break_point = 0;
                 break
             }
         }
@@ -63,19 +65,37 @@ impl Debugger {
         let current_pc = self.device.cpu().reg_pc;
         let current_db = self.device.cpu().reg_db;
         let addr = bus.resolve_addr(current_db, current_pc);
-        let instr = self.inspect_instr_at(addr);
-        println!("${:02X}:{:04X}| {:?}", current_db, current_pc, instr);
+        let instruction = self.inspect_instr_at(addr);
 
         if current_pc == self.break_point {
             true
         } else {
+            print!("${:02X}:{:04X}| ", current_db, current_pc);
+            println!("{:?}", instruction);
             self.device.run_cycle();
             false
         }
     }
 
     fn inspect_emulator(&self) {
-        println!("{:#?}", self.device.cpu());
+        let cpu = self.device.cpu();
+        println!("CPU Status");
+        println!("=======================");
+        println!("A  = {:04X}", cpu.reg_a);
+        println!("X  = {:04X}", cpu.reg_x);
+        println!("Y  = {:04X}", cpu.reg_y);
+        println!("D  = {:04X}", cpu.reg_d);
+        println!("DB = {:02X}", cpu.reg_db);
+        println!("-----------------------");
+        println!("E = {}", if cpu.reg_psr.e == EmulationMode::Emulation { "X" } else { " " });
+        print!("N = {} ", if cpu.reg_psr.n { "X" } else { " " });
+        println!("V = {}", if cpu.reg_psr.v { "X" } else { " " });
+        print!("M = {} ", if cpu.reg_psr.m { "X" } else { " " });
+        println!("X = {}", if cpu.reg_psr.x { "X" } else { " " });
+        print!("D = {} ", if cpu.reg_psr.d { "X" } else { " " });
+        println!("I = {}", if cpu.reg_psr.i { "X" } else { " " });
+        print!("Z = {} ", if cpu.reg_psr.z { "X" } else { " " });
+        println!("C = {}", if cpu.reg_psr.c { "X" } else { " " });
     }
 
     fn print_header(&self) {
